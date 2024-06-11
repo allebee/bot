@@ -79,9 +79,7 @@ async def process_phone(message: types.Message, state: FSMContext):
     data = await state.get_data()
     current_state = await state.get_state()
 
-    info = [data["name"], "+" + data["phone"], data["start_time"]]
-    id = add_crm(info[0], info[1], info[2])
-    await state.update_data(crm_id=id)
+    telegram_id = data['telegram_id']
 
     # Load existing users
     existing_users = {}
@@ -93,15 +91,22 @@ async def process_phone(message: types.Message, state: FSMContext):
     except FileNotFoundError:
         pass
 
+    # Check if the user already exists
+    if telegram_id in existing_users:
+        crm_id = existing_users[telegram_id]["crm_id"]
+    else:
+        info = [data["name"], "+" + data["phone"], data["start_time"]]
+        crm_id = add_crm(info[0], info[1], info[2])
+        await state.update_data(crm_id=crm_id)
+
     # Update user data
-    telegram_id = data['telegram_id']
     existing_users[telegram_id] = {
         "start_time": data["start_time"],
         "telegram_id": data["telegram_id"],
         "name": data["name"],
         "phone": data["phone"],
         "state": str(current_state),
-        "crm_id": data["crm_id"]
+        "crm_id": crm_id
     }
 
     # Write updated data back to CSV
@@ -118,6 +123,7 @@ async def process_phone(message: types.Message, state: FSMContext):
     ]
 
     await message.reply("Choose the payment method:", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=kb))
+
 
 
 @dp.callback_query(lambda c: c.data in ["pay_kaspi", "pay_prodamus"])
