@@ -9,6 +9,65 @@ import cv2
 from aiogram import types
 import pandas as pd
 
+import requests
+import time
+# Replace with your new access token and subdomain
+access_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6IjlkNWY3NGJiY2JlYWNiNjE2YTUxZjAzYzc4YmQyODA0ZGRkOWRlYWQ5YWVlZTdkY2VlMDE4MTE2ZDhjZGUyMWNjNGQwNjlmNDIwZDU4YzBmIn0.eyJhdWQiOiI3MDdmYTJiOC03ZDE0LTRkNmEtYWM1Ni1jZWM1Y2VjNGUyMDAiLCJqdGkiOiI5ZDVmNzRiYmNiZWFjYjYxNmE1MWYwM2M3OGJkMjgwNGRkZDlkZWFkOWFlZWU3ZGNlZTAxODExNmQ4Y2RlMjFjYzRkMDY5ZjQyMGQ1OGMwZiIsImlhdCI6MTcxODEwMjE1MywibmJmIjoxNzE4MTAyMTUzLCJleHAiOjE3MTgxODg1NTMsInN1YiI6IjExMTQ1MzM0IiwiZ3JhbnRfdHlwZSI6IiIsImFjY291bnRfaWQiOjMxNzk0NDAyLCJiYXNlX2RvbWFpbiI6ImFtb2NybS5ydSIsInZlcnNpb24iOjIsInNjb3BlcyI6WyJwdXNoX25vdGlmaWNhdGlvbnMiLCJmaWxlcyIsImNybSIsImZpbGVzX2RlbGV0ZSIsIm5vdGlmaWNhdGlvbnMiXSwiaGFzaF91dWlkIjoiZGU0NDc4NTktNDI1Ni00ZDdkLWExYzYtNzYwNWZhYjlkZGY5In0.VWKefnLRJQe0tQ9lerUKv0OVEoHLyepI-nM_tWoApSmUJX02nIIyN_7TDY7sl1U9O2eAQbfkldFBwdwTUoatv9UO3qo23J9bw9ZOKaghxWdQ_TW4xe7ioCtYlD5_EKCEy55qoHHSsqkW1KGmVMUwIVcDiNb3ZK18AWJbUGCj7TPpKBNILM5qNLDw1USEDDmPeLETGDtE_9Aiv4qf465ZF_w0nRRVKYwVqj5gwcgR0a1OzQL0BOIdfV9mXR4F03GC88lq36ByUtNzZzNmIjlVt0PId3hJkfAmBFwfTUO-7vwLTVxD0ppVefniISykiGSLX_I6wtMLJw60D3r0zdLXhw"
+
+
+def add_crm(name, phone, date):
+
+    # Set the headers for the request
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    # Minimal lead creation data
+    data = [{
+        "name": "No sales",
+        "_embedded":{
+            "contacts":[
+                {
+                "first_name":name,
+                "created_at":int(date),
+                "updated_by":0,
+                "custom_fields_values":[
+                    {
+                        "field_code": "PHONE",
+                        "values":[
+                            {
+                            "enum_code":"WORK",
+                            "value":phone
+                            }
+                        ]
+                    }
+                ]
+                }
+            ],
+            "tags":[{"name": "paid"}],
+        },
+    }]
+
+
+
+    # Make the POST request to create the lead
+    url = f'https://sanzharalibekovgmailcom8.amocrm.ru/api/v4/leads/complex'
+    response = requests.post(url, headers=headers, json=data)
+
+    # Check the response
+    if response.status_code == 201:
+        print("Lead created successfully.")
+        print("Response:", response.json())
+    else:
+        print("Failed to create lead.")
+        print("Status code:", response.status_code)
+        print("Response:", response.json())
+        
+    return response.json()[0]["id"]
+
+
+
 
 def load_json(filename):
     try:
