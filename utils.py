@@ -8,6 +8,7 @@ from pdf2image import convert_from_path
 import cv2
 from aiogram import types
 import pandas as pd
+from qreader import QReader
 
 import requests
 import time
@@ -25,7 +26,7 @@ def add_crm(name, phone, date):
 
     # Minimal lead creation data
     data = [{
-        "name": "No sales",
+        "name": "Zapusk",
         "_embedded":{
             "contacts":[
                 {
@@ -45,7 +46,6 @@ def add_crm(name, phone, date):
                 ]
                 }
             ],
-            "tags":[{"name": "paid"}],
         },
     }]
 
@@ -66,7 +66,37 @@ def add_crm(name, phone, date):
         
     return response.json()[0]["id"]
 
+def edit_crm(id):
+    # Replace with your new access token and subdomain
+    access_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6IjlkNWY3NGJiY2JlYWNiNjE2YTUxZjAzYzc4YmQyODA0ZGRkOWRlYWQ5YWVlZTdkY2VlMDE4MTE2ZDhjZGUyMWNjNGQwNjlmNDIwZDU4YzBmIn0.eyJhdWQiOiI3MDdmYTJiOC03ZDE0LTRkNmEtYWM1Ni1jZWM1Y2VjNGUyMDAiLCJqdGkiOiI5ZDVmNzRiYmNiZWFjYjYxNmE1MWYwM2M3OGJkMjgwNGRkZDlkZWFkOWFlZWU3ZGNlZTAxODExNmQ4Y2RlMjFjYzRkMDY5ZjQyMGQ1OGMwZiIsImlhdCI6MTcxODEwMjE1MywibmJmIjoxNzE4MTAyMTUzLCJleHAiOjE3MTgxODg1NTMsInN1YiI6IjExMTQ1MzM0IiwiZ3JhbnRfdHlwZSI6IiIsImFjY291bnRfaWQiOjMxNzk0NDAyLCJiYXNlX2RvbWFpbiI6ImFtb2NybS5ydSIsInZlcnNpb24iOjIsInNjb3BlcyI6WyJwdXNoX25vdGlmaWNhdGlvbnMiLCJmaWxlcyIsImNybSIsImZpbGVzX2RlbGV0ZSIsIm5vdGlmaWNhdGlvbnMiXSwiaGFzaF91dWlkIjoiZGU0NDc4NTktNDI1Ni00ZDdkLWExYzYtNzYwNWZhYjlkZGY5In0.VWKefnLRJQe0tQ9lerUKv0OVEoHLyepI-nM_tWoApSmUJX02nIIyN_7TDY7sl1U9O2eAQbfkldFBwdwTUoatv9UO3qo23J9bw9ZOKaghxWdQ_TW4xe7ioCtYlD5_EKCEy55qoHHSsqkW1KGmVMUwIVcDiNb3ZK18AWJbUGCj7TPpKBNILM5qNLDw1USEDDmPeLETGDtE_9Aiv4qf465ZF_w0nRRVKYwVqj5gwcgR0a1OzQL0BOIdfV9mXR4F03GC88lq36ByUtNzZzNmIjlVt0PId3hJkfAmBFwfTUO-7vwLTVxD0ppVefniISykiGSLX_I6wtMLJw60D3r0zdLXhw"
 
+
+    # Set the headers for the request
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    # Lead update data
+    data = {
+        "status_id": 67455558
+    }
+
+    # Make the PATCH request to update the lead
+    url = f'https://sanzharalibekovgmailcom8.amocrm.ru/api/v4/leads/{id}'
+    response = requests.patch(url, headers=headers, json=data)
+
+    # Check the response
+    if response.status_code == 204:
+        print("Lead updated successfully.")
+    elif response.status_code == 200:
+        print("Lead update partially successful.")
+        print("Response:", response.json())
+    else:
+        print("Failed to update lead.")
+        print("Status code:", response.status_code)
+        print("Response:", response.json())
+    return "Success"
 
 
 def load_json(filename):
@@ -177,23 +207,25 @@ def extract_qr_code_from_pdf(pdf_path):
 
     for image in images:
         # Save image temporarily to disk
-        temp_image_path = "temp_image.jpg"
+        temp_image_path = "/Users/user/Desktop/dev/zapusk/Screenshot 2024-06-11 at 21.34.49.png"
         image.save(temp_image_path)
 
         # Read the saved image
         image = cv2.imread(temp_image_path)
 
-        # Detect and decode QR codes
-        ret_qr, decoded_info, points, _ = qcd.detectAndDecodeMulti(image)
+        # Create a QReader instance
+        qreader = QReader()
 
-        # Remove the temporary image file
+        # Get the image (as RGB)
+        image = cv2.cvtColor(cv2.imread(temp_image_path), cv2.COLOR_BGR2RGB)
+
+        # Use the detect_and_decode function to get the decoded QR data
+        decoded_texts = qreader.detect_and_decode(image=image)
+        
         os.remove(temp_image_path)
-
-        # Return the first decoded text if found
-        if ret_qr:
-            for info in decoded_info:
-                if info:
-                    return info
+        # Print the results
+        for text in decoded_texts:
+            return text
 
     return None
 

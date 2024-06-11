@@ -49,6 +49,3 @@ def play_game():
     # print("Updated items:", items)
     return chosen_item
 
-# Simulate playing the game 10 times
-for _ in range(10):
-    play_game()
