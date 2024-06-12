@@ -27,11 +27,53 @@ class Form(StatesGroup):
     prodamus = State()
     wheel_available = State()
 
-# Start command handler
+# Load prizes from CSV
+def load_prizes_from_csv(file_path):
+    prizes = []
+    try:
+        with open(file_path, 'r') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                row['chance'] = int(row['chance'])
+                row['count'] = float('inf') if row['count'] == 'inf' else int(row['count'])
+                row['winners'] = row['winners'].split(';') if row['winners'] else []
+                prizes.append(row)
+    except FileNotFoundError:
+        logging.error("Prizes CSV file not found.")
+    return prizes
+
+# Save prizes to CSV
+def save_prizes_to_csv(file_path, prizes):
+    with open(file_path, 'w', newline='') as csvfile:
+        fieldnames = ['name', 'chance', 'count', 'photo_id', 'video_id', 'winners']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for prize in prizes:
+            prize['winners'] = ';'.join(prize['winners'])
+            writer.writerow(prize)
+
+prizes_file = 'prizes.csv'
+prizes = load_prizes_from_csv(prizes_file)
+
+def play_game(prizes, user_id):
+    prize_list = []
+    for prize in prizes:
+        prize_list.extend([prize] * prize['chance'])
+    
+    while True:
+        selected_prize = random.choice(prize_list)
+        if selected_prize['count'] > 0 or selected_prize['count'] == float('inf'):
+            if selected_prize['count'] != float('inf'):
+                selected_prize['count'] -= 1
+                selected_prize['winners'].append(str(user_id))
+                save_prizes_to_csv(prizes_file, prizes)
+            return selected_prize['name']
+        else:
+            prize_list = [p for p in prize_list if p['name'] != selected_prize['name']]
+
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
     current_time = int(time.time())
-
     telegram_id = message.from_user.id
     user_data = {
         "start_time": current_time,
@@ -39,10 +81,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
         "name": "",
         "phone": "",
         "crm_id": "",
-        "payment_time" : 0# Initialize crm_id with a default value
+        "payment_time" : 0
     }
 
-    # Load existing users
     existing_users = {}
     try:
         with open('user_data.csv', 'r') as csvfile:
@@ -57,10 +98,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     await state.update_data(**user_data)
     await state.set_state(Form.name)
-    
     await message.reply("Please enter your name and surname:")
 
-# Name and surname handler
 @dp.message(Form.name)
 async def process_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
@@ -70,7 +109,6 @@ async def process_name(message: types.Message, state: FSMContext):
     ))
     await state.set_state(Form.phone)
 
-# Phone number handler
 @dp.message(Form.phone)
 async def process_phone(message: types.Message, state: FSMContext):
     if message.contact:
@@ -80,8 +118,6 @@ async def process_phone(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
 
     telegram_id = data['telegram_id']
-
-    # Load existing users
     existing_users = {}
     try:
         with open('user_data.csv', 'r') as csvfile:
@@ -91,7 +127,6 @@ async def process_phone(message: types.Message, state: FSMContext):
     except FileNotFoundError:
         pass
 
-    # Check if the user already exists
     if telegram_id in existing_users:
         crm_id = existing_users[telegram_id]["crm_id"]
     else:
@@ -99,7 +134,6 @@ async def process_phone(message: types.Message, state: FSMContext):
         crm_id = add_crm(info[0], info[1], info[2])
         await state.update_data(crm_id=crm_id)
 
-    # Update user data
     existing_users[telegram_id] = {
         "start_time": data["start_time"],
         "telegram_id": data["telegram_id"],
@@ -109,7 +143,6 @@ async def process_phone(message: types.Message, state: FSMContext):
         "crm_id": crm_id
     }
 
-    # Write updated data back to CSV
     with open('user_data.csv', 'w', newline='') as csvfile:
         fieldnames = ["start_time", "telegram_id", "name", "phone", "state", "crm_id", "payment_time"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -127,7 +160,6 @@ async def process_phone(message: types.Message, state: FSMContext):
 @dp.callback_query(lambda c: c.data in ["pay_kaspi", "pay_prodamus"])
 async def payment_method_handler(callback_query: types.CallbackQuery, state: FSMContext):
     await callback_query.answer()
-
     if callback_query.data == "pay_prodamus":
         await state.set_state(Form.prodamus)
         await callback_query.message.answer("https://enalika.proeducation.kz/")
@@ -137,7 +169,6 @@ async def payment_method_handler(callback_query: types.CallbackQuery, state: FSM
         await callback_query.message.answer("https://pay.kaspi.kz/pay/5t1euuhq")
         await callback_query.message.answer("Please upload your PDF receipt for Kaspi payment.")
 
-# Receipt handler
 @dp.message(Form.kaspi)
 async def process_receipt(message: types.Message, state: FSMContext):
     if not message.document or message.document.mime_type != "application/pdf":
@@ -180,12 +211,10 @@ async def process_paycheck(message: types.Message, paycheck_data, state: FSMCont
         await message.reply("https://t.me/+E6WNLXGZH8E3ZTli")
         await message.reply("колесо фортуны /wheel")
 
-        # Update state to wheel_available and add payment time
         payment_time = int(time.time())
         await state.update_data(payment_time=payment_time)
         await state.set_state(Form.wheel_available)
 
-        # Update CSV with payment time
         existing_users = {}
         try:
             with open('user_data.csv', 'r') as csvfile:
@@ -220,7 +249,7 @@ async def play_wheel_game(message: types.Message, state: FSMContext):
         return
 
     try:
-        winning_item = str(play_game(prizes))
+        winning_item = str(play_game(prizes, message.from_user.id))
         for prize in prizes:
             if prize['name'] == winning_item:
                 photo_id = prize['photo_id']
