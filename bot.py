@@ -4,14 +4,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 from aiogram.filters import CommandStart, Command
-from aiogram.types import contact, document
 import asyncio
 from utils import *
 import time
 import csv
 from wheel import *
-import aiogram
 from aiogram import types
+
 API_TOKEN = "6422952891:AAFWdrhr7-2mUnsMnNCZsYYPAjB_SY-bDvM"
 
 logging.basicConfig(level=logging.INFO)
@@ -39,7 +38,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
         "telegram_id": str(telegram_id),
         "name": "",
         "phone": "",
-        "crm_id": ""  # Initialize crm_id with a default value
+        "crm_id": "",
+        "payment_time" : 0# Initialize crm_id with a default value
     }
 
     # Load existing users
@@ -57,8 +57,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     await state.update_data(**user_data)
     await state.set_state(Form.name)
+    
     await message.reply("Please enter your name and surname:")
-
 
 # Name and surname handler
 @dp.message(Form.name)
@@ -111,7 +111,7 @@ async def process_phone(message: types.Message, state: FSMContext):
 
     # Write updated data back to CSV
     with open('user_data.csv', 'w', newline='') as csvfile:
-        fieldnames = ["start_time", "telegram_id", "name", "phone", "state", "crm_id"]
+        fieldnames = ["start_time", "telegram_id", "name", "phone", "state", "crm_id", "payment_time"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for user in existing_users.values():
@@ -123,8 +123,6 @@ async def process_phone(message: types.Message, state: FSMContext):
     ]
 
     await message.reply("Choose the payment method:", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=kb))
-
-
 
 @dp.callback_query(lambda c: c.data in ["pay_kaspi", "pay_prodamus"])
 async def payment_method_handler(callback_query: types.CallbackQuery, state: FSMContext):
@@ -181,14 +179,37 @@ async def process_paycheck(message: types.Message, paycheck_data, state: FSMCont
         await message.reply("Чек валидирован")
         await message.reply("https://t.me/+E6WNLXGZH8E3ZTli")
         await message.reply("колесо фортуны /wheel")
+
+        # Update state to wheel_available and add payment time
+        payment_time = int(time.time())
+        await state.update_data(payment_time=payment_time)
         await state.set_state(Form.wheel_available)
+
+        # Update CSV with payment time
+        existing_users = {}
+        try:
+            with open('user_data.csv', 'r') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    existing_users[row['telegram_id']] = row
+        except FileNotFoundError:
+            pass
+
+        existing_users[data["telegram_id"]].update({"payment_time": payment_time})
+
+        with open('user_data.csv', 'w', newline='') as csvfile:
+            fieldnames = ["start_time", "telegram_id", "name", "phone", "state", "crm_id", "payment_time"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for user in existing_users.values():
+                writer.writerow(user)
     else:
         await message.reply("CRM ID not found, cannot validate receipt.")
 
 @dp.message(Command(commands=["wheel"]))
 async def play_wheel_game(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
-    if current_state != "wheel_available":
+    if str(current_state)[5:] != "wheel_available" or current_state is None:
         await message.reply("Please validate your receipt first.")
         return
 
@@ -199,8 +220,17 @@ async def play_wheel_game(message: types.Message, state: FSMContext):
         return
 
     try:
-        winning_item = str(play_game())
-        await message.reply_photo(photo="https://pbs.twimg.com/profile_images/1676625773611081728/k05BA1j1_400x400.jpg")
+        winning_item = str(play_game(prizes))
+        for prize in prizes:
+            if prize['name'] == winning_item:
+                photo_id = prize['photo_id']
+                video_id = prize['video_id']
+        video = await message.reply_video(video=video_id)
+        async def delete_video_later():
+            await asyncio.sleep(13)
+            await bot.delete_message(chat_id=message.chat.id, message_id=video.message_id)
+        await asyncio.ensure_future(delete_video_later())
+        await message.reply_photo(photo=photo_id)
         await message.reply(f"Поздравляем, {name}! Вы выиграли {winning_item}")
     except Exception as e:
         await message.reply("Произошла ошибка. Пожалуйста, попробуйте позже.")
